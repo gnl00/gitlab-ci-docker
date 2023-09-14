@@ -1,0 +1,84 @@
+# docker in docker 模板
+# .gitlab-ci.yml 相关参数：https://docs.gitlab.cn/jh/ci/yaml/
+# docker 相关镜像：https://hub.docker.com/_/docker/tags
+
+default:
+  image: docker:latest # 使用 image 指定运行作业的 Docker 镜像
+  services: # 指定链接到 image 关键字中指定的镜像
+    - docker:dind # 如果使用的执行器是 docker，那么 image: docker:latest 和 services: docker:24.0.5-dind 不可缺少
+    - eclipse-temurin:17-jre
+  before_script: # 会在每一个 job 脚本执行之前执行
+    - echo "$CI_JOB_NAME 开始 $CI_JOB_STARTED_AT"
+    - echo "$CI_JOB_URL"
+    - echo "克隆 Git 仓库的 URL $CI_REPOSITORY_URL"
+    - echo "runner 的描述 $CI_RUNNER_DESCRIPTION"
+    - echo "Docker in docker runner processing"
+    - echo "The next command will show your docker info"
+    - docker info
+    - export # 列出所有预定义的环境变量
+  after_script: # 会在每一个 job 脚本执行之后执行，包括失败的 job。
+    - echo "Docker in docker runner work done"
+
+# 一般来说步骤如下：开发-打包-测试-部署
+stages: # 声明本 pipeline 有哪些 stages，并描述了作业的顺序执行
+  - build
+  - test
+  - deploy
+
+variables:
+  GLOBAL_VAR: "A global variable"
+  DEPLOY_VERSION: "SNAPSHOT"
+
+# 定义一个 job
+build-job:
+  stage: build # 表明这个 job 属于哪个 stage
+  only:
+    - dev # 这个 job 只会在 dev 分支上执行
+    - master
+  script: # 这个 job 要执行哪些动作
+    - echo "building product ..."
+    - echo "输出一个全局变量 $GLOBAL_VAR"
+    - sh ./scripts/build.sh
+    - echo "完整的提交消息如下："
+    - echo "$CI_COMMIT_MESSAGE"
+    - echo "构建项目的分支或标签名称"
+    - echo "$CI_COMMIT_REF_NAME"
+    # docker build 之前需要将 jar 包创建好
+    - docker build -t $CI_PROJECT_NAME:$DEPLOY_VERSION .
+    - echo "docker build finished, show all images now"
+    - docker images
+  tags:
+    - dind_runner_203 # 指定使用标有 docker_runner_203 的 runner 执行这个 job
+
+test-job:
+  stage: test
+  only:
+    - dev
+    - master
+  script:
+    - echo "doing some test job"
+    - echo "The following command will show all docker images"
+    - docker images
+  tags:
+    - dind_runner_203
+
+deploy-job:
+  stage: deploy
+  only:
+    - dev
+    - master
+  script:
+    - echo "deploying product ..."
+  tags:
+    - dind_runner_203
+
+tag-build-job:
+  stage: build
+  only:
+    - tags # 这个 job 只会在推送 tag 的时候执行
+  script:
+    - echo "tag building"
+    - echo "提交标签名称:\ $CI_COMMIT_TAG" # $CI_COMMIT_TAG 仅在标签流水线中可用。
+    - echo "提交标签消息:\ $CI_COMMIT_TAG_MESSAGE"
+  tags:
+    - dind_runner_203

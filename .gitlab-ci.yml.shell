@@ -1,0 +1,64 @@
+# shell executor 模板
+
+# .gitlab-ci.yml 相关参数：https://docs.gitlab.cn/jh/ci/yaml/
+
+# 一般来说步骤如下：开发-打包-测试-部署
+
+stages: # 声明本 pipeline 有哪些 stages，并描述了作业的顺序执行
+  - build
+  - test
+  - deploy
+
+default:
+  before_script: # 会在每一个 job 脚本执行之前执行
+    - echo "Before script section"
+    - echo "For example you might run an update here or install a build dependency"
+    - echo "Or perhaps you might print out some debugging details"
+  after_script: # 会在每一个 job 脚本执行之后执行，包括失败的 job。
+    - echo "After script section"
+    - echo "For example you might do some cleanup here"
+
+# 定义一个 job
+build-job:
+  stage: build # 表明这个 job 属于哪个 stage
+  only:
+    - dev # 这个 job 只会在 dev 分支上执行
+    - master
+  script: # 这个 job 要执行哪些动作
+    - echo "building product ..."
+    # 目前 runner 是使用 docker 来安装的，所以所有能使用到的命令都是在 docker 中的 gitlab-runner 容器中可执行的命令
+    - ls
+    - uname -n
+    - whoami
+    - sh ./scripts/build.sh
+  tags:
+    - docker_runner_203 # 指定使用标有 docker_runner_203 的 runner 执行这个 job
+
+test-job:
+  stage: test
+  only:
+    - dev
+    - master
+  script:
+    - echo "doing some test job"
+  tags:
+    - docker_runner_203
+
+deploy-job:
+  stage: deploy
+  only:
+    - dev
+    - master
+  script:
+    - echo "deploying product ..."
+  tags:
+    - docker_runner_203
+
+tag-build-job:
+  stage: build
+  only:
+    - tags # 这个 job 只会在推送 tag 的时候执行
+  script:
+    - echo "tag building"
+  tags:
+    - docker_runner_203
